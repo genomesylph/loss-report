@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>LOSS Report CSV Converter</title>
+  <title>LOSS Report Converter</title>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     body {
@@ -222,7 +222,7 @@
       });
 
       if (!outputRows.length) {
-        throw new Error("ไม่มีข้อมูลหลังจากแปลง");
+        throw new Error("ERROR! wtf are you doing ?");
       }
 
       const firstSerial = outputRows[0]["Serial Number"];
@@ -291,27 +291,27 @@
     document.getElementById("convertBtn").addEventListener("click", async () => {
       const file = fileInput.files[0];
       if (!file) {
-        setStatus("กรุณาเลือกไฟล์ CSV ก่อน", "error");
+        setStatus("Select CSV First", "error");
         return;
       }
 
       try {
-        setStatus("กำลังประมวลผล...");
+        setStatus("Processing...");
         const text = await readTextWithFallback(file);
         const rows = parseCSV(text);
 
         if (!rows.length) {
-          throw new Error("ไฟล์ CSV ว่างหรือไม่สามารถอ่านได้");
+          throw new Error("CSV is epmpty or unaccessable.");
         }
 
         const outputRows = buildOutputRows(rows);
         const csvText = toCSV(outputRows);
 
         downloadCSV(csvText, file.name.replace(/\.csv$/i, "") + "_output.csv");
-        setStatus("แปลงเสร็จสิ้นแล้ว กำลังดาวน์โหลดไฟล์ output", "success");
+        setStatus("Holy mother Jeesusss! Finished! downloading output...", "success");
       } catch (err) {
         console.error(err);
-        setStatus(err.message || "เกิดข้อผิดพลาดในการประมวลผล", "error");
+        setStatus(err.message || "Something is wrong...", "error");
       }
     });
   </script>
