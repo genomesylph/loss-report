@@ -6,60 +6,236 @@
   <title>LOSS Report Converter</title>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
+    :root {
+      --bg1: #fff7fb;
+      --bg2: #edf9ff;
+      --bg3: #f5f0ff;
+      --card: rgba(255, 255, 255, 0.78);
+      --stroke: #e7d6ff;
+      --pink: #ff9ec4;
+      --pink-strong: #ff6fa8;
+      --lavender: #bda7ff;
+      --sky: #9ad9ff;
+      --mint: #9fe9d1;
+      --peach: #ffd7a8;
+      --text: #413952;
+      --muted: #6e6782;
+      --danger: #ef6b7b;
+      --success: #3bb38d;
+      --shadow: rgba(136, 109, 180, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      margin: 24px;
-      background: #f5f7fb;
-      color: #1f2937;
-    }
-    .card {
-      max-width: 900px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 12px;
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(255, 158, 196, 0.5), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(154, 217, 255, 0.5), transparent 30%),
+        linear-gradient(135deg, var(--bg1), var(--bg2) 45%, var(--bg3));
       padding: 24px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
     }
+
+    .card {
+      width: min(920px, 100%);
+      background: var(--card);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      border-radius: 26px;
+      padding: 32px 28px 28px;
+      box-shadow:
+        0 24px 50px var(--shadow),
+        inset 0 1px 0 rgba(255,255,255,0.7);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before,
+    .card::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(6px);
+      opacity: 0.7;
+    }
+
+    .card::before {
+      width: 220px;
+      height: 220px;
+      background: rgba(255, 158, 196, 0.22);
+      top: -70px;
+      right: -50px;
+    }
+
+    .card::after {
+      width: 180px;
+      height: 180px;
+      background: rgba(154, 217, 255, 0.22);
+      left: -30px;
+      bottom: -50px;
+    }
+
     h1 {
-      margin-top: 0;
-      font-size: 24px;
+      margin: 0 0 18px;
+      font-size: clamp(28px, 3vw, 42px);
+      letter-spacing: 0.03em;
+      color: var(--text);
+      position: relative;
+      z-index: 1;
     }
+
     .row {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       flex-wrap: wrap;
-      margin-top: 16px;
+      position: relative;
+      z-index: 1;
     }
+
     input[type="file"] {
-      padding: 10px;
-      border: 1px solid #d1d5db;
-      border-radius: 8px;
-      background: #fff;
+      flex: 1 1 350px;
+      min-width: 220px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 2px dashed rgba(189, 167, 255, 0.7);
+      background: rgba(255, 255, 255, 0.7);
+      color: var(--text);
+      font-size: 15px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.5);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
+
+    input[type="file"]:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(189, 167, 255, 0.18);
+    }
+
     button {
       border: none;
-      border-radius: 8px;
-      padding: 10px 16px;
+      border-radius: 16px;
+      padding: 14px 22px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
       cursor: pointer;
-      background: #2563eb;
       color: white;
-      font-weight: 600;
+      background: linear-gradient(135deg, var(--pink), var(--lavender));
+      box-shadow:
+        0 12px 18px rgba(255, 111, 168, 0.28),
+        inset 0 1px 0 rgba(255,255,255,0.55);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.2s ease;
+      position: relative;
+      overflow: hidden;
     }
+
     button:hover {
-      background: #1d4ed8;
+      transform: translateY(-2px) scale(1.02);
+      box-shadow:
+        0 18px 22px rgba(255, 111, 168, 0.32),
+        inset 0 1px 0 rgba(255,255,255,0.8);
+      filter: saturate(1.05);
     }
+
+    button:active {
+      transform: scale(0.96) rotate(-2deg);
+    }
+
+    button::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, transparent 20%, rgba(255,255,255,0.35), transparent 80%);
+      transform: translateX(-120%);
+      animation: shimmer 2.6s infinite;
+    }
+
+    .processing {
+      animation: dance 0.45s infinite alternate ease-in-out;
+    }
+
+    .processing::after {
+      content: "✨";
+      position: absolute;
+      right: -8px;
+      top: -8px;
+      font-size: 18px;
+      animation: pop 0.6s infinite alternate;
+    }
+
     .status {
-      margin-top: 18px;
-      min-height: 22px;
-      color: #374151;
-      font-weight: 500;
+      margin-top: 22px;
+      min-height: 28px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.65);
+      border: 1px solid rgba(189, 167, 255, 0.4);
+      color: var(--muted);
+      transition: all 0.2s ease;
     }
-    .error {
-      color: #b91c1c;
+
+    .status.success {
+      color: var(--success);
+      background: rgba(159, 233, 209, 0.28);
+      border-color: rgba(59, 179, 141, 0.35);
+      animation: successGlow 0.7s ease;
     }
-    .success {
-      color: #15803d;
+
+    .status.error {
+      color: var(--danger);
+      background: rgba(239, 107, 123, 0.12);
+      border-color: rgba(239, 107, 123, 0.3);
+      animation: shake 0.35s ease-in-out;
+    }
+
+    @keyframes shimmer {
+      100% {
+        transform: translateX(120%);
+      }
+    }
+
+    @keyframes dance {
+      0% {
+        transform: rotate(-3deg) translateY(0);
+      }
+      100% {
+        transform: rotate(3deg) translateY(-2px);
+      }
+    }
+
+    @keyframes pop {
+      0% {
+        transform: scale(0.8) rotate(0deg);
+      }
+      100% {
+        transform: scale(1.25) rotate(12deg);
+      }
+    }
+
+    @keyframes successGlow {
+      0% { transform: scale(0.96); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-4px); }
+      50% { transform: translateX(4px); }
+      75% { transform: translateX(-2px); }
     }
   </style>
 </head>
@@ -72,12 +248,13 @@
       <button id="convertBtn">Convert</button>
     </div>
 
-    <div id="status" class="status"></div>
+    <div id="status" class="status">Ready to sparkle ✨</div>
   </div>
 
   <script>
     const statusEl = document.getElementById("status");
     const fileInput = document.getElementById("fileInput");
+    const button = document.getElementById("convertBtn");
 
     function setStatus(msg, type = "") {
       statusEl.textContent = msg;
@@ -189,7 +366,7 @@
       const twoMeanCol = findFirstHeader(headers, ["2inch.*mean", "2inch.*impedance.*mean"]);
 
       if (!sixMeanCol || !twoMeanCol) {
-        throw new Error("ไม่พบคอลัมน์ค่า Mean ของ 6inch หรือ 2inch");
+        throw new Error("ไม่พบคอลัมน์ Mean ของ 6inch หรือ 2inch");
       }
 
       const outputRows = [];
@@ -222,7 +399,7 @@
       });
 
       if (!outputRows.length) {
-        throw new Error("ERROR! wtf are you doing ?");
+        throw new Error("No rows found after conversion");
       }
 
       const firstSerial = outputRows[0]["Serial Number"];
@@ -291,27 +468,33 @@
     document.getElementById("convertBtn").addEventListener("click", async () => {
       const file = fileInput.files[0];
       if (!file) {
-        setStatus("Select CSV First", "error");
+        setStatus("Select CSV first 😅", "error");
         return;
       }
 
+      button.classList.add("processing");
+      setStatus("Processing your cutest CSV... ✨", "");
+
       try {
-        setStatus("Processing...");
         const text = await readTextWithFallback(file);
         const rows = parseCSV(text);
 
         if (!rows.length) {
-          throw new Error("CSV is epmpty or unaccessable.");
+          throw new Error("CSV is empty or unreadable.");
         }
 
         const outputRows = buildOutputRows(rows);
         const csvText = toCSV(outputRows);
 
         downloadCSV(csvText, file.name.replace(/\.csv$/i, "") + "_output.csv");
-        setStatus("Holy mother Jeesusss! Finished! downloading output...", "success");
+        setStatus("Mission complete! Output is on the way 🚀", "success");
       } catch (err) {
         console.error(err);
-        setStatus(err.message || "Something is wrong...", "error");
+        setStatus(err.message || "Something went wrong... 😵", "error");
+      } finally {
+        setTimeout(() => {
+          button.classList.remove("processing");
+        }, 700);
       }
     });
   </script>
