@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LOSS Report CSV Converter</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 24px;
+      background: #f5f7fb;
+      color: #1f2937;
+    }
+    .card {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    input[type="file"] {
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+    }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+      font-weight: 600;
+    }
+    button:hover {
+      background: #1d4ed8;
+    }
+    .status {
+      margin-top: 18px;
+      min-height: 22px;
+      color: #374151;
+      font-weight: 500;
+    }
+    .error {
+      color: #b91c1c;
+    }
+    .success {
+      color: #15803d;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>LOSS Report CSV Converter</h1>
+
+    <div class="row">
+      <input id="fileInput" type="file" accept=".csv,text/csv" />
+      <button id="convertBtn">Convert</button>
+    </div>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const fileInput = document.getElementById("fileInput");
+
+    function setStatus(msg, type = "") {
+      statusEl.textContent = msg;
+      statusEl.className = "status " + type;
+    }
+
+    function normalizeText(v) {
+      return (v || "").trim();
+    }
+
+    function getFrequencyIndex(label) {
+      const m = normalizeText(label).match(/(\d+)(?:st|nd|rd|th)?/i);
+      return m ? Number(m[1]) : null;
+    }
+
+    function findFirstHeader(headers, patterns) {
+      for (const p of patterns) {
+        const regex = new RegExp(p, "i");
+        const hit = headers.find(h => regex.test(normalizeText(h)));
+        if (hit) return hit;
+      }
+      return null;
+    }
+
+    function buildFreqMap(headers, text) {
+      const map = {};
+      headers.forEach((h) => {
+        const key = normalizeText(h);
+        if (key.toLowerCase().includes(text.toLowerCase())) {
+          const idx = getFrequencyIndex(key);
+          if (idx !== null) map[idx] = h;
+        }
+      });
+      return map;
+    }
+
+    function decodeBytes(bytes) {
+      try {
+        const utf8 = new TextDecoder("utf-8").decode(bytes);
+        if (!utf8.includes("\uFFFD")) return utf8;
+      } catch (e) {}
+
+      try {
+        return new TextDecoder("windows-1252").decode(bytes);
+      } catch (e) {
+        return new TextDecoder("latin-1").decode(bytes);
+      }
+    }
+
+    function readTextWithFallback(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            const bytes = new Uint8Array(e.target.result);
+            resolve(decodeBytes(bytes));
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.onerror = () => reject(new Error("Unable to read file"));
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function parseCSV(text) {
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false
+      });
+
+      if (parsed.errors && parsed.errors.length) {
+        for (const err of parsed.errors) {
+          if (err.type !== "Delimiter") {
+            console.warn(err);
+          }
+        }
+      }
+
+      return parsed.data;
+    }
+
+    function buildOutputRows(rows) {
+      const headers = Object.keys(rows[0] || {});
+      const freqMap = buildFreqMap(headers, "Frequency");
+      const maxMap = buildFreqMap(headers, "Max Spec Loss");
+      const measMap = buildFreqMap(headers, "Measured Loss");
+      const fitMap = buildFreqMap(headers, "Fit Loss");
+      const uncMap = buildFreqMap(headers, "Uncertainty (%)");
+
+      const freqOrder = Object.keys(freqMap).map(Number).sort((a, b) => a - b);
+
+      const baseCols = [];
+      ["Serial Number", "Test Point", "Total Result"].forEach((name) => {
+        if (headers.includes(name)) baseCols.push(name);
+      });
+
+      if (baseCols.length < 3) {
+        const serialCol = findFirstHeader(headers, ["serial\\s*number", "serial"]);
+        const testCol = findFirstHeader(headers, ["test\\s*point", "point"]);
+        const totalCol = findFirstHeader(headers, ["total\\s*result", "result"]);
+        [serialCol, testCol, totalCol].forEach((c) => {
+          if (c && !baseCols.includes(c)) baseCols.push(c);
+        });
+      }
+
+      const sixMeanCol = findFirstHeader(headers, ["6inch.*mean", "6inch.*impedance.*mean"]);
+      const twoMeanCol = findFirstHeader(headers, ["2inch.*mean", "2inch.*impedance.*mean"]);
+
+      if (!sixMeanCol || !twoMeanCol) {
+        throw new Error("ไม่พบคอลัมน์ค่า Mean ของ 6inch หรือ 2inch");
+      }
+
+      const outputRows = [];
+
+      rows.forEach((row) => {
+        const serial = row[baseCols[0]] || "";
+        const testPoint = row[baseCols[1]] || "";
+        const totalResult = row[baseCols[2]] || "";
+        const sixMean = row[sixMeanCol] || "";
+        const twoMean = row[twoMeanCol] || "";
+
+        freqOrder.forEach((freqIdx) => {
+          if (!(freqIdx in freqMap) || !(freqIdx in maxMap) || !(freqIdx in measMap) || !(freqIdx in fitMap) || !(freqIdx in uncMap)) {
+            return;
+          }
+
+          outputRows.push({
+            "Serial Number": serial,
+            "Test Point": testPoint,
+            "Total Result": totalResult,
+            "Frequency": row[freqMap[freqIdx]] || "",
+            "Max Spec Loss": row[maxMap[freqIdx]] || "",
+            "Measured Loss": row[measMap[freqIdx]] || "",
+            "Fit Loss": row[fitMap[freqIdx]] || "",
+            "Uncertainty (%)": row[uncMap[freqIdx]] || "",
+            "6inch Line Impendance (¦¸):Mean": sixMean,
+            "2inch Line Impendance (¦¸):Mean": twoMean
+          });
+        });
+      });
+
+      if (!outputRows.length) {
+        throw new Error("ไม่มีข้อมูลหลังจากแปลง");
+      }
+
+      const firstSerial = outputRows[0]["Serial Number"];
+      const tpOrder = [];
+      outputRows.forEach((r) => {
+        if (r["Serial Number"] === firstSerial && !tpOrder.includes(r["Test Point"])) {
+          tpOrder.push(r["Test Point"]);
+        }
+      });
+
+      const tpRank = {};
+      tpOrder.forEach((tp, idx) => { tpRank[tp] = idx; });
+
+      const ordered = outputRows.map((r) => ({
+        ...r,
+        __tpRank: tpRank[r["Test Point"]] ?? 9999,
+        __freqNum: Number.parseFloat(r["Frequency"]),
+        __serialNum: Number.parseInt(r["Serial Number"], 10)
+      })).sort((a, b) => {
+        if (a.__tpRank !== b.__tpRank) return a.__tpRank - b.__tpRank;
+        if (a.__freqNum !== b.__freqNum) return a.__freqNum - b.__freqNum;
+        return a.__serialNum - b.__serialNum;
+      });
+
+      return ordered.map((r) => ({
+        "Serial Number": r["Serial Number"],
+        "Test Point": r["Test Point"],
+        "Total Result": r["Total Result"],
+        "Frequency": r["Frequency"],
+        "Max Spec Loss": r["Max Spec Loss"],
+        "Measured Loss": r["Measured Loss"],
+        "Fit Loss": r["Fit Loss"],
+        "Uncertainty (%)": r["Uncertainty (%)"],
+        "6inch Line Impendance (¦¸):Mean": r["6inch Line Impendance (¦¸):Mean"],
+        "2inch Line Impendance (¦¸):Mean": r["2inch Line Impendance (¦¸):Mean"]
+      }));
+    }
+
+    function toCSV(rows) {
+      if (!rows.length) return "";
+      const headers = Object.keys(rows[0]);
+      const csvRows = [headers.join(",")];
+      rows.forEach((row) => {
+        const line = headers.map((h) => {
+          const value = row[h] ?? "";
+          const escaped = String(value).replace(/"/g, '""');
+          return `"${escaped}"`;
+        }).join(",");
+        csvRows.push(line);
+      });
+      return csvRows.join("\n");
+    }
+
+    function downloadCSV(csvText, filename) {
+      const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("convertBtn").addEventListener("click", async () => {
+      const file = fileInput.files[0];
+      if (!file) {
+        setStatus("กรุณาเลือกไฟล์ CSV ก่อน", "error");
+        return;
+      }
+
+      try {
+        setStatus("กำลังประมวลผล...");
+        const text = await readTextWithFallback(file);
+        const rows = parseCSV(text);
+
+        if (!rows.length) {
+          throw new Error("ไฟล์ CSV ว่างหรือไม่สามารถอ่านได้");
+        }
+
+        const outputRows = buildOutputRows(rows);
+        const csvText = toCSV(outputRows);
+
+        downloadCSV(csvText, file.name.replace(/\.csv$/i, "") + "_output.csv");
+        setStatus("แปลงเสร็จสิ้นแล้ว กำลังดาวน์โหลดไฟล์ output", "success");
+      } catch (err) {
+        console.error(err);
+        setStatus(err.message || "เกิดข้อผิดพลาดในการประมวลผล", "error");
+      }
+    });
+  </script>
+</body>
+</html>
